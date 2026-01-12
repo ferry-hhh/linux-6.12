@@ -6,7 +6,7 @@ menu "Device Drivers"
 source "drivers/amba/Kconfig"
 source "drivers/eisa/Kconfig"
 source "drivers/pci/Kconfig"
-source "drivers/cxl/Kconfig"
+# source "drivers/cxl/Kconfig"
 source "drivers/pcmcia/Kconfig"
 source "drivers/rapidio/Kconfig"
 
@@ -244,5 +244,7 @@ source "drivers/hte/Kconfig"
 source "drivers/cdx/Kconfig"
 
 source "drivers/dpll/Kconfig"
+
+source "drivers/cxl_mem/Kconfig"
 
 endmenu

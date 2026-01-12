@@ -1070,6 +1070,7 @@ static const char *__init e820_type_to_string(struct e820_entry *entry)
 	case E820_TYPE_UNUSABLE:	return "Unusable memory";
 	case E820_TYPE_PRAM:		return "Persistent Memory (legacy)";
 	case E820_TYPE_PMEM:		return "Persistent Memory";
+	case E820_TYPE_CXL:     return "CXL Memory (Gem5)";
 	case E820_TYPE_RESERVED:	return "Reserved";
 	case E820_TYPE_SOFT_RESERVED:	return "Soft Reserved";
 	default:			return "Unknown E820 type";
@@ -1279,6 +1280,9 @@ char *__init e820__memory_setup_default(void)
 	return who;
 }
 
+/* Global variables to store CXL topology for NUMA initialization */
+u64 cxl_mem_base_addr = 0;
+u64 cxl_mem_size_bytes = 0;
 /*
  * Calls e820__memory_setup_default() in essence to pick up the firmware/bootloader
  * E820 map - with an optional platform quirk available for virtual platforms
@@ -1287,11 +1291,35 @@ char *__init e820__memory_setup_default(void)
 void __init e820__memory_setup(void)
 {
 	char *who;
+	int i;
 
 	/* This is a firmware interface ABI - make sure we don't break it: */
 	BUILD_BUG_ON(sizeof(struct boot_e820_entry) != 20);
 
 	who = x86_init.resources.memory_setup();
+
+	for (i = 0; i < e820_table->nr_entries; i++) {
+		struct e820_entry *entry = &e820_table->entries[i];
+
+		/*
+		 * Check for firmware-specific CXL memory type (Type 20).
+		 * If detected, promote it to System RAM to allow standard
+		 * kernel memory management subsystems to handle the pages.
+		 */
+		if (entry->type == 20) {
+			pr_info("e820: detected CXL extended memory at %#018Lx (size: %#llx)\n",
+				entry->addr, entry->size);
+
+			/* Cache the topology for later NUMA node assignment */
+			cxl_mem_base_addr = entry->addr;
+			cxl_mem_size_bytes = entry->size;
+
+			/* Mark region as usable System RAM */
+			entry->type = E820_TYPE_RAM;
+
+			pr_info("e820: CXL memory region successfully enabled as System RAM\n");
+		}
+	}
 
 	memcpy(e820_table_kexec, e820_table, sizeof(*e820_table_kexec));
 	memcpy(e820_table_firmware, e820_table, sizeof(*e820_table_firmware));

@@ -159,7 +159,8 @@ static void __init numa_init_array(void)
 		if (early_cpu_to_node(i) != NUMA_NO_NODE)
 			continue;
 		numa_set_node(i, rr);
-		rr = next_node_in(rr, node_online_map);
+		// Do not create CPU for node1
+		// rr = next_node_in(rr, node_online_map);
 	}
 }
 
@@ -192,6 +193,12 @@ static int __init numa_init(int (*init_func)(void))
 	return 0;
 }
 
+#ifndef E820_TYPE_CXL
+#define E820_TYPE_CXL 20
+#endif
+/* Import CXL topology info from e820.c */
+extern u64 cxl_mem_base_addr;
+extern u64 cxl_mem_size_bytes;
 /**
  * dummy_numa_init - Fallback dummy NUMA init
  *
@@ -203,13 +210,37 @@ static int __init numa_init(int (*init_func)(void))
  */
 static int __init dummy_numa_init(void)
 {
-	printk(KERN_INFO "%s\n",
-	       numa_off ? "NUMA turned off" : "No NUMA configuration found");
-	printk(KERN_INFO "Faking a node at [mem %#018Lx-%#018Lx]\n",
-	       0LLU, PFN_PHYS(max_pfn) - 1);
+	u64 cxl_end = cxl_mem_base_addr + cxl_mem_size_bytes;
+
+	/*
+	 * Fallback path: No CXL memory detected.
+	 * Initialize as a standard single-node uniform memory architecture.
+	 */
+	if (cxl_mem_size_bytes == 0) {
+		pr_info("NUMA: Faking a node at [mem %#018Lx-%#018Lx]\n",
+			0LLU, PFN_PHYS(max_pfn) - 1);
+		
+		node_set(0, numa_nodes_parsed);
+		numa_add_memblk(0, 0, PFN_PHYS(max_pfn));
+		return 0;
+	}
+
+	/*
+	 * CXL path: Heterogeneous memory detected.
+	 * Initialize a multi-node topology:
+	 * Node 0: Local DRAM (CPU-attached)
+	 * Node 1: CXL Extended Memory (CPU-less node)
+	 */
+	pr_info("NUMA: Initializing heterogeneous memory topology (DRAM + CXL)\n");
 
 	node_set(0, numa_nodes_parsed);
-	numa_add_memblk(0, 0, PFN_PHYS(max_pfn));
+	node_set(1, numa_nodes_parsed);
+
+	/* Map the local DRAM range to Node 0 */
+	numa_add_memblk(0, 0, cxl_mem_base_addr);
+
+	/* Map the CXL memory range to Node 1 */
+	numa_add_memblk(1, cxl_mem_base_addr, cxl_end);
 
 	return 0;
 }

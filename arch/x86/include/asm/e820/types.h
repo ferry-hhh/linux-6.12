@@ -27,6 +27,7 @@ enum e820_type {
 	 *   6 was assigned differently. Some time they will learn... )
 	 */
 	E820_TYPE_PRAM		= 12,
+	E820_TYPE_CXL		= 20,
 
 	/*
 	 * Special-purpose memory is indicated to the system via the

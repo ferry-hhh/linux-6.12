@@ -45,6 +45,7 @@
  *   time they will learn... )
  */
 #define E820_PRAM	12
+#define E820_CXL	20
 
 /*
  * reserved RAM used by kernel itself
